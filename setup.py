@@ -1,4 +1,11 @@
-from distutils.core import setup
+from setuptools import find_packages, setup
+import pkg_resources as pkg
+from pathlib import Path
+
+FILE = Path(__file__).resolve()
+PARENT = FILE.parent  # root directory
+
+REQUIREMENTS = [f'{x.name}{x.specifier}' for x in pkg.parse_requirements((PARENT / 'requirements.txt').read_text())]
 
 setup(name='multichannel-yolov8',
       version='1.0',
@@ -6,5 +13,6 @@ setup(name='multichannel-yolov8',
       author='Jason Chen',
       author_email='majar62527@gmail.com',
       url='https://github.com/majar5c/mutlichannel-yolov8/',
-      packages=['multichannel_yolov8', 'multichannel_yolov8.utils', 'multichannel_yolov8.model'],
+      packages=find_packages(),
+      install_requires=REQUIREMENTS,
       )
