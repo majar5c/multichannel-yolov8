@@ -102,7 +102,7 @@ class MultiChannelSegmentationValidator(SegmentationValidator):
           self.dataloader = self.dataloader or self.get_dataloader(self.data.get(self.args.split), self.args.batch)
 
           model.eval()
-          model.warmup(imgsz=(1 if pt else self.args.batch, next(self.model.named_parameters())[1].shape[1], imgsz, imgsz))  # warmup
+          model.warmup(imgsz=(1 if pt else self.args.batch, next(model.named_parameters())[1].shape[1], imgsz, imgsz))  # warmup
 
       dt = Profile(), Profile(), Profile(), Profile()
       n_batches = len(self.dataloader)
@@ -205,7 +205,7 @@ class MultiChannelPredictor(SegmentationPredictor):
 
         # Warmup model
         if not self.done_warmup:
-            self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, next(model.named_parameters())[1].shape[1], *self.imgsz))
+            self.model.warmup(imgsz=(1 if self.model.pt or self.model.triton else self.dataset.bs, next(self.model.named_parameters())[1].shape[1], *self.imgsz))
             self.done_warmup = True
 
         self.seen, self.windows, self.batch, profilers = 0, [], None, (ops.Profile(), ops.Profile(), ops.Profile())
