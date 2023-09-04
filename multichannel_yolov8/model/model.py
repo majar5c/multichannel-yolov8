@@ -2,7 +2,7 @@ import inspect
 import ultralytics
 from ultralytics.nn import SegmentationModel
 
-from multichannel_yolov8.model.model_util import MultiChannelSegmentationTrainer, MultiChannelSegmentationValidator
+from multichannel_yolov8.model.model_util import MultiChannelSegmentationTrainer, MultiChannelSegmentationValidator, MultiChannelPredictor
 
 class MultiChannelSegmentationModel(ultralytics.engine.model.Model):
   def smart_load(self, key):
@@ -11,7 +11,7 @@ class MultiChannelSegmentationModel(ultralytics.engine.model.Model):
             'model': SegmentationModel,
             'trainer': MultiChannelSegmentationTrainer,
             'validator': MultiChannelSegmentationValidator,
-            'predictor': ultralytics.models.yolo.segment.SegmentationPredictor}
+            'predictor': MultiChannelPredictor}
     try:
         return map[key]
     except Exception:
