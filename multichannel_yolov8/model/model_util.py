@@ -9,6 +9,7 @@ from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils.checks import check_imgsz
 from ultralytics.utils.ops import Profile
 from ultralytics.nn.autobackend import AutoBackend
+from ultralytics.engine.results import Results
 
 import torch
 from tqdm import tqdm
@@ -222,6 +223,10 @@ class MultiChannelPredictor(SegmentationPredictor):
             with profilers[1]:
                 preds = self.inference(im, *args, **kwargs)
 
+            # Visualize first 3 channels
+            im0s = [im0[:,:,:3] for im0 in im0s]
+            im = im [:, :3, :, :]
+
             # Postprocess
             with profilers[2]:
                 self.results = self.postprocess(preds, im, im0s)
@@ -236,12 +241,7 @@ class MultiChannelPredictor(SegmentationPredictor):
                     'inference': profilers[1].dt * 1E3 / n,
                     'postprocess': profilers[2].dt * 1E3 / n}
                 p, im0 = path[i], None if self.source_type.tensor else im0s[i].copy()
-                im0 = im0[:,:,:3]
-                im = im [:, :3, :, :]
                 p = Path(p)
-                print(f'{type(self.results)}')
-                for result in self.results:
-                    result.orig_img = im0
 
                 if self.args.verbose or self.args.save or self.args.save_txt or self.args.show:
                     s += self.write_results(i, self.results, (p, im, im0))
@@ -274,3 +274,31 @@ class MultiChannelPredictor(SegmentationPredictor):
             LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}{s}")
 
         self.run_callbacks('on_predict_end')
+
+    def postprocess(self, preds, img, orig_imgs):
+        p = ops.non_max_suppression(preds[0],
+                                    self.args.conf,
+                                    self.args.iou,
+                                    agnostic=self.args.agnostic_nms,
+                                    max_det=self.args.max_det,
+                                    nc=len(self.model.names),
+                                    classes=self.args.classes)
+
+        if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
+            orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
+
+        results = []
+        proto = preds[1][-1] if len(preds[1]) == 3 else preds[1]  # second output is len 3 if pt, but only 1 if exported
+        for i, pred in enumerate(p):
+            orig_img = orig_imgs[i]
+            img_path = self.batch[0][i]
+            if not len(pred):  # save empty boxes
+                masks = None
+            elif self.args.retina_masks:
+                pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
+                masks = ops.process_mask_native(proto[i], pred[:, 6:], pred[:, :4], orig_img.shape[:2])  # HWC
+            else:
+                masks = ops.process_mask(proto[i], pred[:, 6:], pred[:, :4], img.shape[2:], upsample=True)  # HWC
+                pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
+            results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], masks=masks))
+        return results
