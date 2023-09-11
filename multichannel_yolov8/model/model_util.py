@@ -230,7 +230,7 @@ class MultiChannelPredictor(SegmentationPredictor):
             # Postprocess
             with profilers[2]:
                 self.results = self.postprocess(preds, im, im0s)
-            self.run_callbacks('on_predict_postprocess_end')
+                self.run_callbacks('on_predict_postprocess_end')
 
             # Visualize, save, write results
             n = len(im0s)
