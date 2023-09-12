@@ -1,3 +1,4 @@
+import ultralytics.engine.predictor
 from ultralytics.models.yolo.segment.predict import SegmentationPredictor
 from ultralytics.models.yolo.segment.train import SegmentationTrainer
 from ultralytics.models.yolo.segment.val import SegmentationValidator
@@ -5,11 +6,13 @@ from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils.plotting import output_to_target
 from ultralytics.utils.torch_utils import de_parallel, select_device, smart_inference_mode
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK, SETTINGS, TQDM_BAR_FORMAT, callbacks, colorstr, emojis, ops
-from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils.checks import check_imgsz
 from ultralytics.utils.ops import Profile
 from ultralytics.nn.autobackend import AutoBackend
 from ultralytics.engine.results import Results
+
+from ultralytics.data.augment import classify_transforms
+from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 
 import torch
 from tqdm import tqdm
@@ -17,6 +20,7 @@ import json
 from copy import copy
 from pathlib import Path
 import cv2
+from multichannel_yolov8.utils.loaders import load_inference_source
 
 from multichannel_yolov8.utils.plot import plot_images
 from multichannel_yolov8.utils.dataset import build_yolo_dataset
@@ -302,3 +306,19 @@ class MultiChannelPredictor(SegmentationPredictor):
                 pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
             results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred[:, :6], masks=masks))
         return results
+    
+    def setup_source(self, source):
+        """Sets up source and inference mode."""
+        self.imgsz = check_imgsz(self.args.imgsz, stride=self.model.stride, min_dim=2)  # check image size
+        self.transforms = getattr(self.model.model, 'transforms', classify_transforms(
+            self.imgsz[0])) if self.args.task == 'classify' else None
+        self.dataset = load_inference_source(source=source,
+                                             imgsz=self.imgsz,
+                                             vid_stride=self.args.vid_stride,
+                                             buffer=self.args.stream_buffer)
+        self.source_type = self.dataset.source_type
+        if not getattr(self, 'stream', True) and (self.dataset.mode == 'stream' or  # streams
+                                                  len(self.dataset) > 1000 or  # images
+                                                  any(getattr(self.dataset, 'video_flag', [False]))):  # videos
+            LOGGER.warning(ultralytics.engine.predictor.STREAM_WARNING)
+        self.vid_path, self.vid_writer = [None] * self.dataset.bs, [None] * self.dataset.bs
